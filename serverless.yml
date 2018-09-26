@@ -1,0 +1,92 @@
+service: instagrao
+
+frameworkVersion: ">=1.1.0 <2.0.0"
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  region: us-east-1
+  environment:
+    DYNAMODB_TABLE_IMAGE: ${self:service}-${opt:stage, self:provider.stage}-images
+    BUCKETNAME_IMAGE: platform.prod.test
+    #prod.instagrao.media
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE_IMAGE}"
+
+package:
+  # individually: true
+  exclude:
+    - "*.test.js"
+  excludeDevDependencies: true
+      
+functions:
+  extractMetadata:
+    handler: handler.extractMetadata
+    description:
+    memorySize: 128
+    timeout: 30
+    events:
+      - s3:
+          bucket: ${self:provider.environment.BUCKETNAME_IMAGE}
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: images/
+            - suffix: .jpg
+  getMetadata:
+    handler: handler.getMetadata
+    description:
+    memorySize: 128
+    timeout: 30
+    events:
+      - http:
+          path: images/metadata/{s3objectkey}
+          method: get
+          cors: true
+  getImage:
+    handler: handler.getImage
+    description:
+    memorySize: 128
+    timeout: 30
+    events:
+      - http:
+          path: images/{s3objectkey}
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    ImagesDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: s3objectkey
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: s3objectkey
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE_IMAGE}
+    S3BucketPermissions:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: ${self:provider.environment.BUCKETNAME_IMAGE}
+        PolicyDocument:
+          Statement:
+            - Principal: "*"
+              Action:
+                - s3:GetObject
+              Effect: Allow
+              Sid: "AddPerm"
+              Resource: arn:aws:s3:::${self:provider.environment.BUCKETNAME_IMAGE}/*
