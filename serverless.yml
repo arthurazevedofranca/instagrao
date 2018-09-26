@@ -8,8 +8,7 @@ provider:
   region: us-east-1
   environment:
     DYNAMODB_TABLE_IMAGE: ${self:service}-${opt:stage, self:provider.stage}-images
-    BUCKETNAME_IMAGE: platform.prod.test
-    #prod.instagrao.media
+    BUCKETNAME_IMAGE: prod.instagrao.media
   iamRoleStatements:
     - Effect: Allow
       Action:
